@@ -1,0 +1,111 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=10
+
+USE_PROCD=1
+
+if [ -z "$(type -t extra_command)" ]; then
+    EXTRA_COMMANDS="update_rules aggregate"
+else
+    extra_command "update_rules" "Fetch new rules from Emerging threads"
+    extra_command "aggregate" "Aggregate alerts stored in database"
+fi
+
+ALERTS_DB="$(uci -q get mocre.setup.live_database || echo "/tmp/morce-alerts.sqlite")"
+COLD_DB="$(uci -q get mocre.setup.cold_database   || echo "/srv/morce-alerts.sqlite")"
+RULES_DIR="/tmp/morce-rules"
+ET_RULES="activex attack_response botcc compromised current_events dos
+          dshield exploit malware mobile_malware trojan worm"
+
+check_db() {
+    [ -f "$COLD_DB" ] || return
+    if [ ! -f "$ALERTS_DB" ] || [ "$COLD_DB" -nt "$ALERTS_DB" ]; then
+        cp -p "$COLD_DB" "$ALERTS_DB"
+    fi
+}
+
+update_rules() {
+    mkdir -p "$RULES_DIR"
+    cd "$RULES_DIR"
+    wget -O version.txt.new https://rules.emergingthreats.net/open/snort-2.9.0/version.txt || return 1
+    if [ "$(cat version.txt.new)" != "$(cat version.txt)" ]; then
+        mv version.txt.new version.txt
+        for ruleset in $ET_RULES; do
+                wget -O emerging-${ruleset}.v2.rules https://rules.emergingthreats.net/open/snort-2.9.0/rules/emerging-${ruleset}.rules || return 1
+                snort2lua -c emerging-${ruleset}.v2.rules -r emerging-${ruleset}.v3.rules
+                sed -i '/^#/ d' emerging-${ruleset}.v3.rules
+                [ -n "$(head -n 10 emerging-${ruleset}.v3.rules)" ] || return 1
+                rm emerging-${ruleset}.v2.rules
+        done
+        for ruleset in $ET_RULES; do
+            cat emerging-${ruleset}.v3.rules
+            rm "emerging-${ruleset}.v3.rules"
+        done > emerging-all.rules
+    fi
+    wget -O - https://www.snort.org/advisories | grep /advisories/talos-rules- | sha256sum > talos-version.txt.new || return 1
+    if [ "$(cat talos-version.txt.new)" != "$(cat talos-version.txt)" ]; then
+        mv talos-version.txt.new talos-version.txt
+        wget -O - https://www.snort.org/downloads/community/snort3-community-rules.tar.gz | \
+            tar -xzf - snort3-community-rules/snort3-community.rules
+        sed -i '/^#/ d' snort3-community-rules/snort3-community.rules
+    fi
+    cat snort3-community-rules/snort3-community.rules emerging-all.rules > all.rules
+    {
+        echo "ips = {"
+        echo "    enable_builtin_rules = true,"
+        echo "    include = '$RULES_DIR/all.rules'",
+        echo "    variables = default_variables"
+        echo "}"
+        echo "suppress = {"
+        echo "}"
+    } > morce_rules.lua
+}
+
+aggregate() {
+    # One sentence at the time not to hold lock for too long
+    [ -f "$ALERTS_DB" ] || return
+    set -e
+    echo 'create table if not exists aggregated_alerts (
+              time timestamp, aggregation char(1), count INTEGER, mac varchar(20) default "",
+              alert_id varchar(20) default "", dst_ip varchar(50) default "", dst_port integer default 0);
+         ' | sqlite3 "$ALERTS_DB"
+    ts="$(($(date +%s) - 3600 * 24 * 7))"
+    echo 'insert into aggregated_alerts 
+          select strftime("%Y-%m-%d %H:00:00", time), "H", count(time), mac, alert_id, dst_ip, dst_port 
+              FROM live_alerts WHERE time < DATETIME('"$ts"', "unixepoch") GROUP BY strftime("%Y-%m-%d %H:00:00", time), mac, alert_id,  dst_ip, dst_port
+         ' | sqlite3 "$ALERTS_DB"
+         echo 'delete from live_alerts where time < DATETIME('"$ts"', "unixepoch")' | sqlite3 "$ALERTS_DB"
+    ts="$(($(date +%s) - 3600 * 24 * 7 * 5))"
+    echo 'insert into aggregated_alerts
+          select strftime("%Y-%m-%d 00:00:00", time), "D", sum(count), mac, alert_id, "", 0 
+              FROM aggregated_alerts WHERE time < DATETIME('"$ts"', "unixepoch") AND aggregation = "H"
+              GROUP BY strftime("%Y-%m-%d 00:00:00", time), mac, alert_id
+         ' | sqlite3 "$ALERTS_DB"
+    echo 'delete from aggregated_alerts where time < DATETIME('"$ts"', "unixepoch") AND aggregation = "H"' | sqlite3 "$ALERTS_DB"
+    echo 'vacuum' | sqlite3 "$ALERTS_DB"
+    set +e
+    mkdir -p "$(dirname "$COLD_DB")"
+    cp -p "$ALERTS_DB" "$COLD_DB"
+}
+
+start_service() {
+    [ -f "$RULES_DIR"/morce_rules.lua ] || update_rules || return 1
+    mkdir -p "$(dirname "$ALERTS_DB")"
+	procd_open_instance
+	procd_set_param command /usr/bin/snort \
+        --daq-dir /usr/lib/daq/ \
+        --script-path /usr/share/morce/loggers/ \
+        --include-path /etc/snort \
+        -c /etc/snort/snort.lua \
+        --tweaks balanced \
+        --lua "include '$RULES_DIR/morce_rules.lua'" \
+        -i "br-lan" \
+        -A alert_morce
+	procd_set_param file "$RULES_DIR"/morce_rules.lua
+    procd_set_param stderr 1
+    procd_set_param stdout 1
+	procd_set_param reload_signal SIGHUP
+	procd_set_param respawn
+	procd_close_instance
+}

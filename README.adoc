@@ -1,0 +1,7 @@
+MORCE - Malice Observing, Reporting and Collecting Engine
+=========================================================
+
+Morce is a collection of simple scripts that integrates Snort[1] into
+OpenWrt[2] and provides easy means how to be notified about any potential
+security issue (as recognized by Snort) and how to store and manage a history
+of such events.

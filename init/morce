@@ -12,9 +12,12 @@ else
     extra_command "aggregate" "Aggregate alerts stored in database"
 fi
 
+START_TRIGGERED=""
+RULES_TRIGGERED=""
 ALERTS_DB="$(uci -q get mocre.setup.live_database || echo "/tmp/morce-alerts.sqlite")"
 COLD_DB="$(uci -q get mocre.setup.cold_database   || echo "/srv/morce-alerts.sqlite")"
 RULES_DIR="/tmp/morce-rules"
+# Rulesets we pull from Emerging Threads
 ET_RULES="activex attack_response botcc compromised current_events dos
           dshield exploit malware mobile_malware trojan worm"
 
@@ -26,11 +29,14 @@ check_db() {
 }
 
 update_rules() {
+    [ -z "$RULES_TRIGGERED" ] || return
     mkdir -p "$RULES_DIR"
     cd "$RULES_DIR"
-    wget -O version.txt.new https://rules.emergingthreats.net/open/snort-2.9.0/version.txt || return 1
-    if [ "$(cat version.txt.new)" != "$(cat version.txt)" ]; then
-        mv version.txt.new version.txt
+
+    # Check for updated Emerging Threads rules
+    local old_version="$(cat et-version.txt)"
+    wget -O et-version.txt https://rules.emergingthreats.net/open/snort-2.9.0/version.txt || return 1
+    if [ "$old_version" != "$(cat et-version.txt)" ]; then
         for ruleset in $ET_RULES; do
                 wget -O emerging-${ruleset}.v2.rules https://rules.emergingthreats.net/open/snort-2.9.0/rules/emerging-${ruleset}.rules || return 1
                 snort2lua -c emerging-${ruleset}.v2.rules -r emerging-${ruleset}.v3.rules
@@ -43,13 +49,18 @@ update_rules() {
             rm "emerging-${ruleset}.v3.rules"
         done > emerging-all.rules
     fi
-    wget -O - https://www.snort.org/advisories | grep /advisories/talos-rules- | sha256sum > talos-version.txt.new || return 1
-    if [ "$(cat talos-version.txt.new)" != "$(cat talos-version.txt)" ]; then
+
+    # Check for updated Snort Community rules
+    old_version="$(cat talos-version.txt)"
+    wget -O - https://www.snort.org/advisories | grep /advisories/talos-rules- | sha256sum > talos-version.txt || return 1
+    if [ "$old_version" != "$(cat talos-version.txt)" ]; then
         mv talos-version.txt.new talos-version.txt
         wget -O - https://www.snort.org/downloads/community/snort3-community-rules.tar.gz | \
             tar -xzf - snort3-community-rules/snort3-community.rules
         sed -i '/^#/ d' snort3-community-rules/snort3-community.rules
     fi
+
+    # Merge and prepare everything
     cat snort3-community-rules/snort3-community.rules emerging-all.rules > all.rules
     {
         echo "ips = {"
@@ -60,22 +71,38 @@ update_rules() {
         echo "suppress = {"
         echo "}"
     } > morce_rules.lua
+
+    # Restart service if appropriate
+    local old_version="$(cat version.txt)"
+    cat morce_rules.lua et-version.txt talos-version.txt | sha256sum > version.txt
+    [ -z "$START_TRIGGERED" ] || return 0
+    [ "$old_version" != "$(cat version.txt)" ] || return 0
+    RULES_TRIGGERED="true"
+    stop
+    start
 }
 
 aggregate() {
-    # One sentence at the time not to hold lock for too long
     [ -f "$ALERTS_DB" ] || return
+
+    # One sentence at the time not to hold lock for too long
     set -e
+
+    # Create aggregated table
     echo 'create table if not exists aggregated_alerts (
               time timestamp, aggregation char(1), count INTEGER, mac varchar(20) default "",
               alert_id varchar(20) default "", dst_ip varchar(50) default "", dst_port integer default 0);
          ' | sqlite3 "$ALERTS_DB"
+
+    # Anything older then week we aggregate per hour
     ts="$(($(date +%s) - 3600 * 24 * 7))"
     echo 'insert into aggregated_alerts 
           select strftime("%Y-%m-%d %H:00:00", time), "H", count(time), mac, alert_id, dst_ip, dst_port 
               FROM live_alerts WHERE time < DATETIME('"$ts"', "unixepoch") GROUP BY strftime("%Y-%m-%d %H:00:00", time), mac, alert_id,  dst_ip, dst_port
          ' | sqlite3 "$ALERTS_DB"
-         echo 'delete from live_alerts where time < DATETIME('"$ts"', "unixepoch")' | sqlite3 "$ALERTS_DB"
+    echo 'delete from live_alerts where time < DATETIME('"$ts"', "unixepoch")' | sqlite3 "$ALERTS_DB"
+
+    # Anything older then five weeks we aggregate per day
     ts="$(($(date +%s) - 3600 * 24 * 7 * 5))"
     echo 'insert into aggregated_alerts
           select strftime("%Y-%m-%d 00:00:00", time), "D", sum(count), mac, alert_id, "", 0 
@@ -83,15 +110,21 @@ aggregate() {
               GROUP BY strftime("%Y-%m-%d 00:00:00", time), mac, alert_id
          ' | sqlite3 "$ALERTS_DB"
     echo 'delete from aggregated_alerts where time < DATETIME('"$ts"', "unixepoch") AND aggregation = "H"' | sqlite3 "$ALERTS_DB"
+
+    # Cleanup
     echo 'vacuum' | sqlite3 "$ALERTS_DB"
-    set +e
+
+    # Make persistent backup
     mkdir -p "$(dirname "$COLD_DB")"
     cp -p "$ALERTS_DB" "$COLD_DB"
+    set +e
 }
 
 start_service() {
-    [ -f "$RULES_DIR"/morce_rules.lua ] || update_rules || return 1
+    START_TRIGGERED="true"
+    update_rules || return 1
     mkdir -p "$(dirname "$ALERTS_DB")"
+    [ "$ALERTS_DB" -nt "$COLD_DB" ] || cp "$COLD_DB" "$ALERTS_DB"
 	procd_open_instance
 	procd_set_param command /usr/bin/snort \
         --daq-dir /usr/lib/daq/ \
@@ -108,4 +141,8 @@ start_service() {
 	procd_set_param reload_signal SIGHUP
 	procd_set_param respawn
 	procd_close_instance
+}
+
+service_stopped() {
+    aggregate
 }

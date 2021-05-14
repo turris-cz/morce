@@ -1,7 +1,40 @@
 MORCE - Malice Observing, Reporting and Collecting Engine
 =========================================================
 
-Morce is a collection of simple scripts that integrates Snort[1] into
+MORCE is a collection of simple scripts that integrates Snort[1] into
 OpenWrt[2] and provides easy means how to be notified about any potential
 security issue (as recognized by Snort) and how to store and manage a history
 of such events.
+
+[1] https://www.snort.org/
+[2] https://openwrt.org/
+
+Installation
+------------
+
+MORCE depends on snort3 including snort2lua tool to convert rules.
+Installation is pretty straight forward. Apart from Snort itself you need to
+deploy the following files into following directories:
+
+`init/morce` -> `/etc/init.d/morce`
+`logger/alert_morce.lua` -> `/usr/share/morce/loggers/alert_morce.lua`
+
+Cron
+~~~~
+
+It is highly recommended to setup a cron script that would periodically check
+for updated rules. That can be done via calling `/etc/init.d/morce update_rules`.
+Whenever new rules are detected, Snort is restarted and rules are taken into
+account. In general it doesn't make sense to trigger this action more often
+then once a day as currently selected rules publishers are publishing new rules
+at most once a day.
+
+Rules
+-----
+
+By default MORCE uses Snort 3 Community Rules[3] and subset of Open Emerging
+Threads ruleset[4]. You can use `/etc/init.d/morce update_rules` to check for
+updated rules.
+
+[3] https://www.snort.org/downloads/#rule-downloads
+[4] https://doc.emergingthreats.net/

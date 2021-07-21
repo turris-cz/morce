@@ -1,3 +1,29 @@
+# Notification options
 config config 'notify'
-    option enabled '1'
-    option command 'create_notification -s error'
+    # Allows you to disable notifications
+    ## option enabled '0'
+
+    # Allows you to override notification command
+    # Notification is added as a last argument
+    ## option command 'create_notification -s error'
+
+config config 'setup'
+    # Database for live data
+    ## option live_database '/var/run/morce/morce-alerts.sqlite'
+    # Database for cold and persistent data
+    ## option cold_database '/srv/morce-alerts.sqlite'
+
+config config 'et'
+    # Specify which ruleset you want to use, default is all bellow enabled
+    ## list rules "activex"
+    ## list rules "attack_response"
+    ## list rules "botcc"
+    ## list rules "compromised"
+    ## list rules "current_events"
+    ## list rules "dos"
+    ## list rules "dshield"
+    ## list rules "exploit"
+    ## list rules "malware"
+    ## list rules "mobile_malware"
+    ## list rules "trojan"
+    ## list rules "worm"

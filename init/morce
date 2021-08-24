@@ -97,68 +97,8 @@ aggregate() {
     [ -f "$ALERTS_DB" ] || return 0
 
     set -e
-    # Timestamp week ago
-    w_ts="$(($(date +%s) - 3600 * 24 * 7))"
-    # Timestamp 5 weeks ago
-    m_ts="$(($(date +%s) - 3600 * 24 * 7 * 5))"
-
-    # Create aggregated table
-    # 'aggregation' column can contain:
-    # - H - hourly aggregated
-    # - D - daily aggregated
-    sqlite3 "$ALERTS_DB" <<EOF
-        CREATE TABLE IF NOT EXISTS aggregated_alerts (
-              time TIMESTAMP,
-              aggregation CHAR(1),
-              count INTEGER,
-              mac VARCHAR(20) default "",
-              alert_id VARCHAR(20) default "",
-              dst_ip VARCHAR(50) default "",
-              dst_port INTEGER default 0
-         );
-
-        # Anything older then week we aggregate per hour
-        INSERT INTO aggregated_alerts(
-            time, aggregation, count, mac, alert_id, dst_ip, dst_port
-          ) SELECT
-                 strftime("%Y-%m-%d %H:00:00", time),
-                 "H",
-                 count(time),
-                 mac,
-                 alert_id,
-                 dst_ip,
-                 dst_port 
-             FROM live_alerts WHERE
-                 time < DATETIME($w_ts, "unixepoch")
-             GROUP BY
-                 strftime("%Y-%m-%d %H:00:00", time),
-                 mac,
-                 alert_id,
-                 dst_ip,
-                 dst_port;
-        DELETE FROM live_alerts WHERE time < DATETIME($w_ts, "unixepoch");
-
-        # Anything older then five weeks we aggregate per day
-        INSERT INTO aggregated_alerts(
-            time, aggregation, count, mac, alert_id, dst_ip, dst_port
-          ) SELECT
-                  strftime("%Y-%m-%d 00:00:00", time),
-                  "D",
-                  sum(count),
-                  mac,
-                  alert_id,
-                  "",
-                  0 
-              FROM aggregated_alerts WHERE
-                  time < DATETIME($m_ts, "unixepoch") AND
-                  aggregation = "H"
-              GROUP BY
-                  strftime("%Y-%m-%d 00:00:00", time),
-                  mac,
-                  alert_id;
-        DELETE FROM aggregated_alerts WHERE time < DATETIME($m_ts, "unixepoch") AND aggregation = "H";
-        VACUUM;
-EOF
+    # Aggregate records
+    sqlite3 "$ALERTS_DB" < /usr/share/morce/aggregate.sql
 
     # Make persistent backup
     local cold_db_dir="$(dirname "$COLD_DB")"

@@ -12,6 +12,8 @@ config config 'setup'
     ## option live_database '/var/run/morce/morce-alerts.sqlite'
     # Database for cold and persistent data
     ## option cold_database '/srv/morce-alerts.sqlite'
+    # Interface to listen on
+    ## option interface 'br-lan'
 
 config config 'et'
     # Specify which ruleset you want to use, default is all bellow enabled

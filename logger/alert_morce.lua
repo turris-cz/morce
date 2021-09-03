@@ -31,7 +31,7 @@ function init()
 	u_cur = uci.uci.cursor()
 
 	-- Open the database
-	local db_path = u_cur:get("morce", "setup", "live_database") or "/tmp/morce-alerts.sqlite"
+	local db_path = u_cur:get("morce", "setup", "live_database") or "/var/run/morce/morce-alerts.sqlite"
 	db_con = db:connect(db_path)
 	if not db_con then
 		return false
@@ -47,16 +47,16 @@ function init()
 	-- Create tables and view if they don't exist yet
 	db_con:execute([[
 		CREATE TABLE IF NOT EXISTS alert_messages(
-			alert_id char(20) NOT NULL PRIMARY KEY ON CONFLICT REPLACE, msg text default ""
+			alert_id char(20) NOT NULL PRIMARY KEY ON CONFLICT REPLACE, msg text default "" NOT NULL
 		) WITHOUT ROWID;
 	]])
 	db_con:execute([[
 		CREATE TABLE IF NOT EXISTS live_alerts(
-			time timestamp default current_timestamp,
-			alert_id varchar(20) default "" REFERENCES alert_messages(alert_id) ON DELETE RESTRICT,
-			mac varchar(20) default "",
-			dst_ip varchar(50) default "",
-			dst_port integer default 0
+			time timestamp default current_timestamp NOT NULL,
+			alert_id varchar(20) default "" REFERENCES alert_messages(alert_id) ON DELETE RESTRICT NOT NULL,
+			mac varchar(20) default "" NOT NULL,
+			dst_ip varchar(50) default "" NOT NULL,
+			dst_port integer default 0 NOT NULL
 		);
 	]])
 	return true

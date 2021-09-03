@@ -12,13 +12,14 @@ PRAGMA foreign_keys = ON;
  - D - daily aggregated
 */
 CREATE TABLE IF NOT EXISTS aggregated_alerts (
-      time TIMESTAMP,
-      aggregation CHAR(1),
-      count INTEGER,
-      mac VARCHAR(20) default "",
-      alert_id VARCHAR(20) default "",
-      dst_ip VARCHAR(50) default "",
-      dst_port INTEGER default 0
+      time TIMESTAMP NOT NULL,
+      aggregation CHAR(1) NOT NULL,
+      count INTEGER default 0 NOT NULL,
+      mac VARCHAR(20) default "" NOT NULL,
+      alert_id VARCHAR(20) default "" NOT NULL,
+      dst_ip VARCHAR(50) default "" NOT NULL,
+      dst_port INTEGER default 0 NOT NULL,
+      CHECK(aggregation GLOB '[DM]')
 );
 
 -- Create temp table for variables as sqlite does not support variables
@@ -31,8 +32,8 @@ CREATE TEMP TABLE timestamps (
 -- Anything older then week we aggregate per hour
 INSERT INTO timestamps VALUES ("week_ago", datetime("now", "-7 days"));
 INSERT INTO aggregated_alerts(
-    time, aggregation, count, mac, alert_id, dst_ip, dst_port
-  ) SELECT
+        time, aggregation, count, mac, alert_id, dst_ip, dst_port
+    ) SELECT
         strftime("%Y-%m-%d %H:00:00", time),
         "H",
         count(time),
@@ -61,8 +62,8 @@ DELETE FROM live_alerts WHERE time < (
 -- Anything older then month we aggregate per day
 INSERT INTO timestamps VALUES ("month_ago", DATETIME("now", "-1 months"));
 INSERT INTO aggregated_alerts(
-    time, aggregation, count, mac, alert_id, dst_ip, dst_port
-  ) SELECT
+        time, aggregation, count, mac, alert_id, dst_ip, dst_port
+    ) SELECT
         strftime("%Y-%m-%d 00:00:00", time),
         "D",
         sum(count),

@@ -38,3 +38,12 @@ updated rules.
 
 [3] https://www.snort.org/downloads/#rule-downloads
 [4] https://doc.emergingthreats.net/
+
+Configuration
+-------------
+
+Configuration is done via `/etc/config/morce` UCI file. You can specify there
+how you want to be notified, where do various databases live and also a subset
+of Emerging Threads ruleset that you want to use.
+
+For syntax of specific options, see link:uci/morce[default uci file].

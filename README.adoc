@@ -13,8 +13,10 @@ MORCE depends on snort3 including snort2lua tool to convert rules.
 Installation is pretty straight forward. Apart from Snort itself you need to
 deploy the following files into following directories:
 
-`init/morce` -> `/etc/init.d/morce`
-`logger/alert_morce.lua` -> `/usr/share/morce/loggers/alert_morce.lua`
+-------------------------------------------------------------------------------
+init/morce -> /etc/init.d/morce
+logger/alert_morce.lua -> /usr/share/morce/loggers/alert_morce.lua
+-------------------------------------------------------------------------------
 
 Cron
 ~~~~

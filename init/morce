@@ -84,7 +84,7 @@ update_rules() (
     cat > morce_rules.lua <<EOF
 ips = {
     enable_builtin_rules = true,
-    include = '$RULES_DIR/all.rules'",
+    include = '$RULES_DIR/all.rules',
     variables = default_variables
 }
 suppress = {

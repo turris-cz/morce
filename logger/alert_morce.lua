@@ -28,7 +28,7 @@ function init()
 	end
 
 	-- Initialize UCI
-	u_cur = uci.uci.cursor()
+	u_cur = uci.cursor()
 
 	-- Open the database
 	local db_path = u_cur:get("morce", "setup", "live_database") or "/var/run/morce/morce-alerts.sqlite"

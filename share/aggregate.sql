@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS aggregated_alerts (
 );
 
 -- Create temp table for variables as sqlite does not support variables
-PRAGMA temp_store = MEMORY
+PRAGMA temp_store = MEMORY;
 CREATE TEMP TABLE timestamps (
     name VARCHAR(10) PRIMARY KEY,
     stamp TIMESTAMP

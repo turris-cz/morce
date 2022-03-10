@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS aggregated_alerts (
       alert_id VARCHAR(20) default "" NOT NULL,
       dst_ip VARCHAR(50) default "" NOT NULL,
       dst_port INTEGER default 0 NOT NULL,
-      CHECK(aggregation GLOB '[DM]')
+      CHECK(aggregation GLOB '[HD]')
 );
 
 -- Create temp table for variables as sqlite does not support variables

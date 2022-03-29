@@ -83,7 +83,7 @@ update_rules() (
     cat snort3-community.rules emerging-all.rules > all.rules
     cat > morce_rules.lua <<EOF
 ips = {
-    enable_builtin_rules = true,
+    enable_builtin_rules = false,
     include = '$RULES_DIR/all.rules',
     variables = default_variables
 }

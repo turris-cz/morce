@@ -3,7 +3,7 @@ config config 'notify'
     # Allows you to disable notifications
     ## option enabled '0'
 
-    # Allows you to override notification command
+    # Allows you to override the notification command
     # Notification is added as a last argument
     ## option command 'create_notification -s error'
 
@@ -16,7 +16,7 @@ config config 'setup'
     ## option interface 'br-lan'
 
 config config 'et'
-    # Specify which ruleset you want to use, default is all bellow enabled
+    # Specify which ruleset you want to use, the default is all bellow enabled
     ## list rules "activex"
     ## list rules "attack_response"
     ## list rules "botcc"

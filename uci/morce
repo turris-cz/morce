@@ -14,6 +14,9 @@ config config 'setup'
     ## option cold_database '/srv/morce-alerts.sqlite'
     # Interface to listen on
     ## option interface 'br-lan'
+    # List of sids to ignore
+    ## list ignore "1999999"
+    ## list ignore "666"
 
 config config 'et'
     # Specify which ruleset you want to use, the default is all bellow enabled

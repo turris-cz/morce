@@ -82,6 +82,10 @@ update_rules() (
     # Merge and prepare everything
     cat snort3-community.rules emerging-all.rules > all.rules
     echo 'alert tcp any any -> any $HTTP_PORTS ( msg:"Testing Turris Morce integration"; flow:to_server,established; http_uri; content: "turris.cz/morce/test",fast_pattern,nocase; service:http; sid: 1999999; rev:1;)' >> all.rules
+    config_get IGNORE_SID setup ignore ""
+    for sid in $IGNORE_SID; do
+        sed -i "/ sid:[[:blank:]]*$sid;/ d" all.rules
+    done
     cat > morce_rules.lua <<EOF
 ips = {
     enable_builtin_rules = false,

@@ -81,15 +81,6 @@ function alert()
 	db_con:execute(string.format(
 		[[INSERT INTO live_alerts (alert_id,mac,dst_ip,dst_port) VALUES ('%s','%s','%s',%d)]],
 		alert_id, db_con:escape(src_eth), db_con:escape(dst_ip), pkt.dp))
-
-	-- Create a notification
-	local notify = u_cur:get("morce", "notify", "enabled") or 1
-	if notify == 1 then
-		local notify_cmd = u_cur:get("morce", "notify", "command") or "create_notification -s error"
-		os.execute(string.format(
-			[[%s 'Security alert from host %s to %s:%d%s%s (%s)']],
-			notify_cmd, src_eth, dst_ip, pkt.dp, "\n", msg, alert_id))
-	end
 end
 
 -- plugin table to register ourselves in snort

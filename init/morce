@@ -11,6 +11,7 @@ if [ -z "$(type -t extra_command)" ]; then
 else
     extra_command "update_rules" "Fetch new rules from Emerging threads"
     extra_command "aggregate"    "Aggregate alerts stored in database"
+    extra_command "notify"       "Send notification with a summary"
 fi
 
 config_load morce
@@ -102,6 +103,66 @@ EOF
     [ "$old_version" != "$(cat version.txt)" ] || return 0
     [ -z "$do_restart" ] || procd_send_signal morce '*' SIGHUP
 )
+
+mac2name() {
+    local mac="$(echo "$1" | tr 'a-z' 'A-Z')"
+    local entry="$(uci show dhcp | tr 'a-z' 'A-Z' | sed -n "s|^dhcp\.\(.*\)\.mac='$mac'|\1|ip" | head -n 1)"
+    entry="$(uci show dhcp | sed -n "s|^dhcp\.${entry}\.name='\([^']*\)'|\1|ip" | head -n 1)"
+    if [ -n "$entry" ]; then
+        echo "$entry ($mac)"
+    else
+        echo "$mac"
+    fi
+}
+
+format_notifications() {
+    # No database - no notifications
+    [ -f "$ALERTS_DB" ] || return 0
+    # When was the last report sent?
+    local last_timestamp='1970-01-01 00:00:00'
+    [ ! -f "$ALERTS_DB".last_notification ] || last_timestamp="$(cat "$ALERTS_DB".last_notification)"
+    echo "$last_timestamp" >> "$ALERTS_DB".last_notification 
+    local last_mac=""
+    #Get the relevant data (stored up to one second ago)
+    sqlite3 /var/run/morce/morce-alerts.sqlite \
+        "select * from live_alerts natural join alert_messages where 
+                  time > '$last_timestamp' and time < datetime(unixepoch()-1,'unixepoch')
+                  group by mac order by time ASC;" | \
+        while IFS="|" read ts alert_id mac dst dst_port alertmsg; do
+            # Try to convert MAC address to something usefull
+            if [ "$last_mac" != "$mac" ]; then
+                [ -z "$last_mac" ] || echo
+                [ -n "$mac" ] || mac="unknown"
+                echo "Device $(mac2name "$mac")"
+                last_mac="$mac"
+            fi
+            # Prepare the error message
+            local target=""
+            alertmsg="$(echo "$alertmsg" | sed 's|^"\(.*\)"$|\1|')"
+            if [ -n "$dst" ]; then
+                target=" targeting $dst port $dst_port"
+            elif [ -n "$dst_port" ]; then
+                target=" targeting port $dst_port"
+            fi
+            echo " * $ts - $alertmsg ($alert_id)$target"
+            echo "$ts" >> "$ALERTS_DB".last_notification 
+        done
+    # Find the latest message we did a report for
+    local ts="$(sort "$ALERTS_DB".last_notification | tail -n 1)"
+    echo "$ts" > "$ALERTS_DB".last_notification
+}
+
+notify() {
+    local notifications="$(format_notifications)"
+    local enabled="$(uci -q get morce.notify.enabled || echo "1")"
+    local command="$(uci -q get morce.notify.command || echo "create_notification -s error")"
+    # Do we have everything we need to notify the user?
+    if [ -n "$notifications" ] && [ "$enabled" = 1 ] && [ -n "$command" ]; then
+        $command "Security alert from your Turris router '`uname -n`'
+
+$notifications"
+    fi
+}
 
 aggregate() {
     [ -f "$ALERTS_DB" ] || return 0

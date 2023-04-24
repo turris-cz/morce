@@ -87,8 +87,8 @@ function alert()
 	if notify == 1 then
 		local notify_cmd = u_cur:get("morce", "notify", "command") or "create_notification -s error"
 		os.execute(string.format(
-			[[%s 'Security alert from host %s to %s:%d%s%s']],
-			notify_cmd, src_eth, dst_ip, pkt.dp, "\n", msg))
+			[[%s 'Security alert from host %s to %s:%d%s%s (%s)']],
+			notify_cmd, src_eth, dst_ip, pkt.dp, "\n", msg, alert_id))
 	end
 end
 

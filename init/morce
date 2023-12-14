@@ -99,8 +99,8 @@ EOF
 
     # Restart service if appropriate
     local old_version="$(cat version.txt 2> /dev/null)"
-    cat morce_rules.lua et-version.txt talos-version.txt | sha256sum > version.txt
-    [ "$old_version" != "$(cat version.txt)" ] || return 0
+    local new_version="$(cat morce_rules.lua et-version.txt talos-version.txt /etc/config/morce | sha256sum | tee version.txt)"
+    [ "$old_version" != "$new_version" ] || return 0
     [ -z "$do_restart" ] || procd_send_signal morce '*' SIGHUP
 )
 
